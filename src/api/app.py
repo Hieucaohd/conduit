@@ -8,6 +8,7 @@ from src.api.exceptions import InvalidUsage
 from autotech_sdk.database.mongo import MongoDBInit
 
 from src.api.hello_world_ping import views as hello_world_views
+from src.api.article import views as article_views
 from flask_apispec import FlaskApiSpec
 
 
@@ -46,7 +47,7 @@ def register_blueprints(app: Flask):
     cors.init_app(hello_world_views.blueprint, origins=origins)
 
     app.register_blueprint(hello_world_views.blueprint)
-
+    app.register_blueprint(article_views.blueprint)
 
 def register_error_handlers(app: Flask):
 
