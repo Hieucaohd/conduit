@@ -1,12 +1,26 @@
 from flask import Blueprint
 from src.api.urls import Endpoint
 from src.api import HttpMethod
-
+from src.common.utils.alchemy import execute_sql
+from sqlalchemy.sql import text
 blueprint = Blueprint("article",__name__)
 
 @blueprint.route(Endpoint.ARTICLE, methods =[HttpMethod.GET])
 def get_articles():
-    return "article"
+    state = "SELECT * FROM conduit.article" 
+    result = execute_sql(state)
+    dict_return = {"articles":result,
+                   "articlesCount" :len(result),
+                    "author": {
+                    "username": "jake",
+                    "bio": "I work at statefarm",
+                    "image": "https://i.stack.imgur.com/xHWG8.jpg",
+                    "following": False
+                    }
+                   }
+    return dict_return
+
+
 
 @blueprint.route(Endpoint.ARTICLE1, methods =[HttpMethod.GET])
 def get_single_article(slug):
@@ -20,28 +34,28 @@ def create_article():
 def update_article(slug):
     return f"updated successfully article has id {slug}"
 
-@blueprint.route(Endpoint.ARTICLE1, method =[HttpMethod.DELETE])
+@blueprint.route(Endpoint.ARTICLE1, methods =[HttpMethod.DELETE])
 def detele_article(slug):
     return f"deleted successfully article has id {slug}"
 
-@blueprint.route(Endpoint.ARTICLE_COMMENTS, method =[HttpMethod.GET])
+@blueprint.route(Endpoint.ARTICLE_COMMENTS, methods =[HttpMethod.GET])
 def get_comments(slug):
     return "comments" 
 
-@blueprint.route(Endpoint.ARTICLE_COMMENTS, method =[HttpMethod.POST])
+@blueprint.route(Endpoint.ARTICLE_COMMENTS, methods =[HttpMethod.POST])
 def create_comments(slug):
     return "comments" 
 
 @blueprint.route(Endpoint.ARTICLE_FAVORITE, methods=[HttpMethod.POST])
-def add_favourite(slug):
+def add_favourite():
     return "add favorite" 
 
 @blueprint.route(Endpoint.ARTICLE_FAVORITE, methods=[HttpMethod.PUT])
-def delete_favourite(slug):
+def delete_favourite():
     return "delete favorite"
 
 @blueprint.route(Endpoint.TAG, methods=[HttpMethod.GET])
-def retrieve_tag(slug):
+def retrieve_tag():
     return "all of tag" 
 
 

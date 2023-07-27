@@ -13,7 +13,7 @@ class Config(object):
     APP_DIR = os.path.abspath(os.path.dirname(__file__))   # This directory
     PROJECT_ROOT = os.path.abspath(os.path.join(APP_DIR, os.pardir))
     CACHE_TYPE = "simple"   # Can be "memcached", "redis", etc.
-    CORS_ORIGIN_WHITELIST = []
+    CORS_ORIGIN_WHITELIST = ['http://localhost:4100']
 
 
 class ProdConfig(Config):

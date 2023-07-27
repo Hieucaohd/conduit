@@ -45,6 +45,7 @@ def register_blueprints(app: Flask):
     origins = app.config.get('CORS_ORIGIN_WHITELIST', '*')
 
     cors.init_app(hello_world_views.blueprint, origins=origins)
+    cors.init_app(article_views.blueprint, origins=origins)
 
     app.register_blueprint(hello_world_views.blueprint)
     app.register_blueprint(article_views.blueprint)
