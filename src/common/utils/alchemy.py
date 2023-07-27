@@ -19,7 +19,7 @@ def execute_sql(state):
         first = result.fetchall()
         list_data = [] 
         for i in first:
-            list_data.append(i._mapping._key_to_index)
+            list_data.append(dict(i._mapping))
         return list_data
 
  
