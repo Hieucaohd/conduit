@@ -38,6 +38,7 @@ ORDER BY
                 conduit.article AS article
             LEFT JOIN conduit.author ON article.author_name = conduit.author.username"""
     result = execute_sql(state)
+    
     list_slug_with_tag_name = []
     current_article = result[0]
     taglist = []
@@ -158,8 +159,7 @@ WHERE
     del current_article['tag_name']
     current_article['tagList']=taglist
     list_slug_with_tag_name.append(current_article)
-    result['tagList'] = []
-    result['tagList'] = list_slug_with_tag_name['tagList']
+    result["tagList"] = list_slug_with_tag_name[0]['tagList']
     dict_return = {"article":result,
             }
     
