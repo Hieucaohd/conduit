@@ -5,7 +5,7 @@ from src.common.utils.alchemy import execute_sql
 blueprint = Blueprint("article",__name__)
 
 @blueprint.route(Endpoint.ARTICLE, methods =[HttpMethod.GET])
-def get_articles():
+def get_article() : 
     state = """SELECT
 	slug,
 	title,
@@ -13,39 +13,78 @@ def get_articles():
 	body,
 	created_at,
 	updated_at,
+	tag_name,
 	username,
 	bio,
 	image 
 FROM
-conduit.article AS article
-LEFT JOIN conduit.author ON article.author_name = conduit.author.username""" 
-    
+	conduit.article AS article
+	LEFT JOIN conduit.author ON article.author_name = conduit.author.username 
+	LEFT JOIN conduit.tag ON article.slug = conduit.tag.article_slug 
+ORDER BY
+  slug ASC;
+""" 
+    state1 ="""SELECT
+                slug,
+                title,
+                description,
+                body,
+                created_at,
+                updated_at,
+                username,
+                bio,
+                image 
+            FROM
+                conduit.article AS article
+            LEFT JOIN conduit.author ON article.author_name = conduit.author.username"""
     result = execute_sql(state)
-    author = {}
-    for a in result :
-        b = a["updated_at"]
-        c = a["created_at"]
-        del a["created_at"] 
-        del a["updated_at"]
-        a['updatedAt'] = b 
-        a['createdAt'] = c 
-        a['tagList'] = ["dragons", "training"]
-        a["favorited"] = False
-        a["favoritesCount"] = 0
-        username = a["username"]
-        bio = a["bio"] 
-        image = a["image"]
-        author["username"] = username 
-        author["bio"] = bio 
-        author["image"] = image
-        del a["username"] 
-        del a["bio"]
-        del a["image"]
-        author["following"] = False  
-        a["author"] = author  
-    dict_return = {"articles":result,
-                   "articlesCount" :len(result),
-                }
+    list_slug_with_tag_name = []
+    current_article = result[0]
+    taglist = []
+    for i in result :
+        if i['slug'] == current_article['slug'] :
+            taglist.append(i['tag_name'])
+        else : 
+            del current_article['tag_name']
+            current_article['tagList']=taglist
+            list_slug_with_tag_name.append(current_article)
+            current_article = i 
+            taglist=[i['tag_name']]
+
+    del current_article['tag_name']
+    current_article['tagList']=taglist 
+    list_slug_with_tag_name.append(current_article)
+
+    
+    result1 = execute_sql(state1) 
+    author = {} 
+    for a in result1 : 
+        author['username'] = a['username'] 
+        author['bio'] = a['bio'] 
+        author['image'] = a['image'] 
+        author['following'] = False
+        del a['username']
+        del a['bio'] 
+        del a['image'] 
+        createdAt  = a['created_at'] 
+        updatedAt  = a['created_at'] 
+        a['createdAt'] = createdAt 
+        a['updatedAt'] = updatedAt 
+        del a['created_at']
+        del a['updated_at']
+        a['author'] = author
+        a['favorited'] = False
+        a['favoritesCount'] = 0 
+        a['tagList'] = []
+    for a in result1 :     
+        for i in list_slug_with_tag_name :
+            if i['slug'] == a['slug'] :
+                a['tagList'] = i['tagList']
+
+
+    dict_return = {"articles":result1,
+                    "articlesCount" :len(result1),
+                    }
     
     return dict_return 
 
@@ -68,19 +107,34 @@ FROM
 	LEFT JOIN conduit.author ON article.author_name = conduit.author.username 
 WHERE
 	article.slug = '{slug}' """
+    state_with_tag = f"""SELECT
+	slug,
+	title,
+	description,
+	body,
+	created_at,
+	updated_at,
+	tag_name,
+	username,
+	bio,
+	image 
+FROM
+	conduit.article AS article
+	LEFT JOIN conduit.author ON article.author_name = conduit.author.username 
+	LEFT JOIN conduit.tag ON article.slug = conduit.tag.article_slug 
+WHERE 
+	article.slug in ('{slug}') """ 
     result = execute_sql(state)
     if len(result) == 0 :
         return {} 
     author = {}
-    result = result[0] 
+    result = result[0]
     b = result["updated_at"]
     c = result["created_at"]
-    d = result
     del result["created_at"] 
     del result["updated_at"]
     result['updatedAt'] = b 
     result['createdAt'] = c 
-    result['tagList'] = ["dragons", "training"]
     result["favorited"] = False
     result["favoritesCount"] = 0
     username = result["username"]
@@ -94,6 +148,18 @@ WHERE
     del result["image"]
     author["following"] = False  
     result["author"] = author  
+    
+    result1 = execute_sql(state_with_tag)
+    list_slug_with_tag_name = []
+    current_article = result1[0]
+    taglist = []
+    for i in result1 :
+        taglist.append(i['tag_name'])
+    del current_article['tag_name']
+    current_article['tagList']=taglist
+    list_slug_with_tag_name.append(current_article)
+    result['tagList'] = []
+    result['tagList'] = list_slug_with_tag_name['tagList']
     dict_return = {"article":result,
             }
     
