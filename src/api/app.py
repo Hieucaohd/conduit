@@ -9,6 +9,7 @@ from autotech_sdk.database.mongo import MongoDBInit
 
 from src.api.hello_world_ping import views as hello_world_views
 from src.api.article import views as article_views
+from src.api.user import views as user_views
 from flask_apispec import FlaskApiSpec
 
 
@@ -45,10 +46,12 @@ def register_blueprints(app: Flask):
     origins = app.config.get('CORS_ORIGIN_WHITELIST', '*')
 
     cors.init_app(hello_world_views.blueprint, origins=origins)
-    cors.init_app(article_views.blueprint, origins=origins)
+    cors.init_app(article_views.article, origins=origins)
+
 
     app.register_blueprint(hello_world_views.blueprint)
-    app.register_blueprint(article_views.blueprint)
+    app.register_blueprint(article_views.article)
+
 
 def register_error_handlers(app: Flask):
 

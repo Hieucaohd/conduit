@@ -22,7 +22,11 @@ def execute_sql(state):
             list_data.append(dict(i._mapping))
         return list_data
 
- 
+def execute_sql1(state) :
+    with engine.connect() as con :
+        statement = text(f"{state}")
+        con.execute(statement) 
+    
 
 
 

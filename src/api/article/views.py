@@ -2,9 +2,9 @@ from flask import Blueprint
 from src.api.urls import Endpoint
 from src.api import HttpMethod
 from src.common.utils.alchemy import execute_sql
-blueprint = Blueprint("article",__name__)
+article = Blueprint("article",__name__)
 
-@blueprint.route(Endpoint.ARTICLE, methods =[HttpMethod.GET])
+@article.route(Endpoint.ARTICLE, methods =[HttpMethod.GET])
 def get_article() : 
     state = """SELECT
 	slug,
@@ -76,7 +76,7 @@ ORDER BY
         a['author'] = author
         a['favorited'] = False
         a['favoritesCount'] = 0 
-        a['tagList'] = []
+        # a['tagList'] = []
     for a in result1 :     
         for i in list_slug_with_tag_name :
             if i['slug'] == a['slug'] :
@@ -91,7 +91,7 @@ ORDER BY
 
 
 
-@blueprint.route(Endpoint.ARTICLE1, methods =[HttpMethod.GET])
+@article.route(Endpoint.ARTICLE1, methods =[HttpMethod.GET])
 def get_single_article(slug):
     state = f"""SELECT
 	slug,
@@ -165,37 +165,85 @@ WHERE
     
     return dict_return 
 
-# @blueprint.route(Endpoint.ARTICLE, methods =[HttpMethod.POST])
+# @article.route(Endpoint.ARTICLE, methods =[HttpMethod.POST])
 # def create_article():
 #     return "created successfully"
 
-# @blueprint.route(Endpoint.ARTICLE1, methods =[HttpMethod.PUT])
+# @article.route(Endpoint.ARTICLE1, methods =[HttpMethod.PUT])
 # def update_article(slug):
 #     return f"updated successfully article has id {slug}"
 
-# @blueprint.route(Endpoint.ARTICLE1, methods =[HttpMethod.DELETE])
+# @article.route(Endpoint.ARTICLE1, methods =[HttpMethod.DELETE])
 # def detele_article(slug):
 #     return f"deleted successfully article has id {slug}"
 
-# @blueprint.route(Endpoint.ARTICLE_COMMENTS, methods =[HttpMethod.GET])
-# def get_comments(slug):
-#     return "comments" 
+@article.route(Endpoint.ARTICLE_COMMENTS, methods =[HttpMethod.GET])
+def get_comments(slug):
+    state = f"""
+SELECT 
+	id ,
+	comments.created_at,
+	comments.updated_at,
+	comments.body,
+	author.username,
+	author.bio,
+	author.image
+FROM conduit.comments AS comments 
+INNER JOIN conduit.author ON comments.author_name = author.username 
+RIGHT JOIN conduit.article ON comments.article_slug = article.slug 
+WHERE 
+	slug in ('{slug}')
+"""
+    result = execute_sql(state)
+    author = {}
+    for i in result : 
+        a = i['username']
+        b = i['bio']
+        c = i['image']
+        i['createdAt'] = i['created_at']
+        i['updatedAt'] = i['updated_at']
+        del i['created_at']
+        del i['updated_at'] 
+        del i['username']
+        del i['bio']
+        del i['image']
+        author['username'] = a 
+        author['bio'] = b 
+        author['image'] = c 
+        author['following'] = False                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+        i['author'] = author 
+    dict_return = {'comments' :result , 
+    }
+    return dict_return
 
-# @blueprint.route(Endpoint.ARTICLE_COMMENTS, methods =[HttpMethod.POST])
+
+
+# @article.route(Endpoint.ARTICLE_COMMENTS, methods =[HttpMethod.POST])
 # def create_comments(slug):
 #     return "comments" 
 
-# @blueprint.route(Endpoint.ARTICLE_FAVORITE, methods=[HttpMethod.POST])
+# @article.route(Endpoint.ARTICLE_FAVORITE, methods=[HttpMethod.POST])
 # def add_favourite():
 #     return "add favorite" 
 
-# @blueprint.route(Endpoint.ARTICLE_FAVORITE, methods=[HttpMethod.PUT])
+# @article.route(Endpoint.ARTICLE_FAVORITE, methods=[HttpMethod.PUT])
 # def delete_favourite():
 #     return "delete favorite"
 
-# @blueprint.route(Endpoint.TAG, methods=[HttpMethod.GET])
-# def retrieve_tag():
-#     return "all of tag" 
+@article.route(Endpoint.TAG, methods=[HttpMethod.GET])
+def retrieve_tag():
+    state = """SELECT 
+	        tag_name
+            FROM conduit.tag """
+    result = execute_sql(state)
+    tag = []
+    for i in result :
+        tag.append(i['tag_name'])
+    tag_name = {"tags" : tag
+    }
+    return tag_name 
+
+
 
 
 
