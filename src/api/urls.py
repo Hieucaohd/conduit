@@ -1,5 +1,5 @@
 class Endpoint:
-    HELLO_WORLD = "/"
+    HELLO_WORLD = "/hello"
     ARTICLE = "/api/articles"
     # get all article 
     ARTICLE1 ="/api/articles/<string:slug>"
@@ -13,9 +13,9 @@ class Endpoint:
     # registration and update user
     USER1 = "/api/users/login" 
     # login 
-    USER2 = "api/profiles/:username"
+    USER2 = "/api/profiles/<string:username>"
     # get profiles 
-    USER3 = "api/profiles/:username/follow"
+    USER3 = "/api/profiles/<string:au_username>/follow"
     # follow user and unfollow user
 
 

@@ -28,6 +28,8 @@ def create_app(config_object=ProdConfig):
 
     docs = FlaskApiSpec(app)
     register_blueprint_for_docs(docs)
+    
+
     return app
 
 
@@ -46,11 +48,12 @@ def register_blueprints(app: Flask):
     origins = app.config.get('CORS_ORIGIN_WHITELIST', '*')
 
     cors.init_app(hello_world_views.blueprint, origins=origins)
-    cors.init_app(article_views.article, origins=origins)
-
+    cors.init_app(article_views.blueprint, origins=origins)
+    cors.init_app(user_views.blueprint, origins=origins)
 
     app.register_blueprint(hello_world_views.blueprint)
-    app.register_blueprint(article_views.article)
+    app.register_blueprint(article_views.blueprint)
+    app.register_blueprint(user_views.blueprint)
 
 
 def register_error_handlers(app: Flask):
@@ -61,3 +64,4 @@ def register_error_handlers(app: Flask):
         return response
 
     app.errorhandler(InvalidUsage)(error_handler)
+

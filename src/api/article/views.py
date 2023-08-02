@@ -1,65 +1,45 @@
-from flask import Blueprint
+from flask import Blueprint,request,jsonify,json
+from datetime import datetime
 from src.api.urls import Endpoint
 from src.api import HttpMethod
-from src.common.utils.alchemy import execute_sql
-article = Blueprint("article",__name__)
+from src.common.utils.alchemy import execute_sql,execute_sql2
+from src.common.utils.condui_jwt import encode,decode 
+blueprint = Blueprint("article",__name__)
 
-@article.route(Endpoint.ARTICLE, methods =[HttpMethod.GET])
+@blueprint.route(Endpoint.ARTICLE, methods =[HttpMethod.GET])
 def get_article() : 
     state = """SELECT
-	slug,
-	title,
-	description,
-	body,
-	created_at,
-	updated_at,
-	tag_name,
-	username,
-	bio,
-	image 
+	article.slug,
+	article.title,
+	article.description,
+	article.body,
+	article.created_at,
+	article.updated_at,
+	tag.tag_name,
+	author.username,
+	author.bio,
+	author.image,
+	COUNT(favorited.article_slug) AS favorites_count 
 FROM
 	conduit.article AS article
-	LEFT JOIN conduit.author ON article.author_name = conduit.author.username 
-	LEFT JOIN conduit.tag ON article.slug = conduit.tag.article_slug 
-ORDER BY
-  slug ASC;
+	LEFT JOIN conduit.author ON article.author_name = conduit.author.username
+	LEFT JOIN conduit.tag ON article.slug = conduit.tag.article_slug
+	INNER JOIN conduit.favorited ON article.slug = favorited.article_slug
+GROUP BY
+	article.slug,
+	article.title,
+	article.description,
+	article.body,
+	article.created_at,
+	article.updated_at,
+	tag.tag_name,
+	author.username,
+	author.bio,
+	author.image
 """ 
-    state1 ="""SELECT
-                slug,
-                title,
-                description,
-                body,
-                created_at,
-                updated_at,
-                username,
-                bio,
-                image 
-            FROM
-                conduit.article AS article
-            LEFT JOIN conduit.author ON article.author_name = conduit.author.username"""
     result = execute_sql(state)
-    
-    list_slug_with_tag_name = []
-    current_article = result[0]
-    taglist = []
-    for i in result :
-        if i['slug'] == current_article['slug'] :
-            taglist.append(i['tag_name'])
-        else : 
-            del current_article['tag_name']
-            current_article['tagList']=taglist
-            list_slug_with_tag_name.append(current_article)
-            current_article = i 
-            taglist=[i['tag_name']]
-
-    del current_article['tag_name']
-    current_article['tagList']=taglist 
-    list_slug_with_tag_name.append(current_article)
-
-    
-    result1 = execute_sql(state1) 
     author = {} 
-    for a in result1 : 
+    for a in result : 
         author['username'] = a['username'] 
         author['bio'] = a['bio'] 
         author['image'] = a['image'] 
@@ -68,47 +48,30 @@ ORDER BY
         del a['bio'] 
         del a['image'] 
         createdAt  = a['created_at'] 
-        updatedAt  = a['created_at'] 
+        updatedAt  = a['created_at']
+        tagList = a['tag_name'] 
+        favorites_count = a['favorites_count']
+        a['favoritesCount'] = favorites_count
         a['createdAt'] = createdAt 
-        a['updatedAt'] = updatedAt 
+        a['updatedAt'] = updatedAt
+        a['tagList'] = tagList 
         del a['created_at']
         del a['updated_at']
+        del a['tag_name']
+        del a['favorites_count']
         a['author'] = author
         a['favorited'] = False
-        a['favoritesCount'] = 0 
-        # a['tagList'] = []
-    for a in result1 :     
-        for i in list_slug_with_tag_name :
-            if i['slug'] == a['slug'] :
-                a['tagList'] = i['tagList']
-
-
-    dict_return = {"articles":result1,
-                    "articlesCount" :len(result1),
+    dict_return = {"articles":result,
+                    "articlesCount" :len(result),
                     }
     
     return dict_return 
 
 
 
-@article.route(Endpoint.ARTICLE1, methods =[HttpMethod.GET])
+@blueprint.route(Endpoint.ARTICLE1, methods =[HttpMethod.GET])
 def get_single_article(slug):
     state = f"""SELECT
-	slug,
-	title,
-	description,
-	body,
-	created_at,
-	updated_at,
-	username,
-	bio,
-	image 
-FROM
-	conduit.article AS article
-	LEFT JOIN conduit.author ON article.author_name = conduit.author.username 
-WHERE
-	article.slug = '{slug}' """
-    state_with_tag = f"""SELECT
 	slug,
 	title,
 	description,
@@ -132,8 +95,11 @@ WHERE
     result = result[0]
     b = result["updated_at"]
     c = result["created_at"]
+    d = result["tag_name"]
     del result["created_at"] 
     del result["updated_at"]
+    del result["tag_name"]
+    result['tagList'] = d
     result['updatedAt'] = b 
     result['createdAt'] = c 
     result["favorited"] = False
@@ -149,35 +115,109 @@ WHERE
     del result["image"]
     author["following"] = False  
     result["author"] = author  
-    
-    result1 = execute_sql(state_with_tag)
-    list_slug_with_tag_name = []
-    current_article = result1[0]
-    taglist = []
-    for i in result1 :
-        taglist.append(i['tag_name'])
-    del current_article['tag_name']
-    current_article['tagList']=taglist
-    list_slug_with_tag_name.append(current_article)
-    result["tagList"] = list_slug_with_tag_name[0]['tagList']
     dict_return = {"article":result,
-            }
-    
+    }
     return dict_return 
 
-# @article.route(Endpoint.ARTICLE, methods =[HttpMethod.POST])
-# def create_article():
-#     return "created successfully"
 
-# @article.route(Endpoint.ARTICLE1, methods =[HttpMethod.PUT])
-# def update_article(slug):
-#     return f"updated successfully article has id {slug}"
+@blueprint.route(Endpoint.ARTICLE, methods=[HttpMethod.POST])
+def create_article():
+    to = request.headers.get("Authorization")
+    token = to[6:]
+    if not token: 
+        return jsonify({"message": "your token is not committed or invalid"})
+    
+    jwt_token = decode(token) 
+    username = jwt_token['username']
+    if not username: 
+        return jsonify({"message": "check your token again"})
+    
+    data = request.get_json()
+    title = data.get('article', {}).get('title')
+    state = f"""SELECT * FROM conduit.article WHERE slug = '{title}'"""
+    result = execute_sql(state)
+    if result:
+        return jsonify({"message": "article was existed"})
+    
+    description = data.get('article', {}).get('description')
+    body = data.get('article', {}).get('body') 
+    tagList = list(data.get('article', {}).get('tagList'))
+    
+    current_date_time = datetime.now()
+    state = f"""INSERT INTO conduit.article(slug,title,description,body,created_at,updated_at,author_name)
+                VALUES('{title}','{title}','{description}','{body}','{current_date_time}','{current_date_time}','{username}')"""
+    
+    execute_sql2(state)
+    
+    state1 = f"""INSERT INTO conduit.tag(tag_name,article_slug)
+                VALUES (ARRAY{tagList},'{title}')"""
+    
+    execute_sql2(state1)
+    
+    return jsonify({'message': 'success'})
+    # state1 = f"""SELECT username,bio,image FROM conduit.author WHERE username = '{username}'"""
+    # result1 = execute_sql(state1)
+    # result_main = result1[0]
+    # article = {}
+    # article['slug'] = title 
+    # article['title'] = title 
+    # article['description'] = description 
+    # article['body'] = body 
+    # article['tagList'] = tagList 
+    # article['created_At'] = current_date_time 
+    # article['updated_At'] = current_date_time 
+    # article["favorited"] = False 
+    # article["favoritesCount"] = 0 
+    # author ={} 
+    # author['username'] = result_main['username']
+    # author['bio'] = result_main['bio']
+    # author['image'] = result_main['image'] 
+    # author['following'] = False 
+    # article['author'] = author 
+    # return { 
+    #     'article':article, 
+    # }    
+    
 
-# @article.route(Endpoint.ARTICLE1, methods =[HttpMethod.DELETE])
-# def detele_article(slug):
-#     return f"deleted successfully article has id {slug}"
 
-@article.route(Endpoint.ARTICLE_COMMENTS, methods =[HttpMethod.GET])
+
+@blueprint.route(Endpoint.ARTICLE1, methods =[HttpMethod.PUT])
+def update_article(slug):
+    to = request.headers.get('Authorization')
+    token = to[6:] 
+    if not token :
+        return jsonify({'message':'check your token'})
+    jwt_token = decode(token)
+    username = jwt_token['username']
+    if not username :
+        return "check your token again"
+    data = request.get_json()
+    title = data.get('article', {}).get('title')
+    state = f"""SELECT author_name FROM conduit.article WHERE slug='{slug}'"""
+    result = execute_sql(state) 
+    result = result[0]['author_name']
+    if result == username :
+        state =f"""UPDATE conduit.article SET title = '{title}' WHERE slug = '{slug}'""" 
+        execute_sql2(state)
+    return jsonify({'message':'updated article'})
+
+
+
+@blueprint.route(Endpoint.ARTICLE1, methods =[HttpMethod.DELETE])
+def detele_article(slug):
+    to = request.headers.get('Authorization')
+    token = to[6:]
+    if not token :
+        return jsonify({'message':'check your token'})
+    jwt_token = decode(token)
+    username = jwt_token['username']
+    if not username :
+        return jsonify({'message':'check your token'})
+    state = """DELETE """
+    return f"deleted successfully article has id {slug}"
+
+
+@blueprint.route(Endpoint.ARTICLE_COMMENTS, methods =[HttpMethod.GET])
 def get_comments(slug):
     state = f"""
 SELECT 
@@ -222,15 +262,27 @@ WHERE
 # def create_comments(slug):
 #     return "comments" 
 
-# @article.route(Endpoint.ARTICLE_FAVORITE, methods=[HttpMethod.POST])
-# def add_favourite():
-#     return "add favorite" 
+@blueprint.route(Endpoint.ARTICLE_FAVORITE, methods=[HttpMethod.POST])
+def add_favourite(slug):
+    to = request.headers.get('Authorization')
+    token = to[6:]
+    if not token :
+        return jsonify({'message':'check your token'})
+    jwt_token = decode(token)
+    username = jwt_token['username']
+    if not username :
+        return jsonify({'message':'check your token'})
+    state =f"""INSERT INTO conduit.favorited(article_slug,username)
+        VALUES ('{slug}','{username}')"""
+    execute_sql2(state) 
+    result = get_single_article(slug)
+    return result      
 
 # @article.route(Endpoint.ARTICLE_FAVORITE, methods=[HttpMethod.PUT])
 # def delete_favourite():
 #     return "delete favorite"
 
-@article.route(Endpoint.TAG, methods=[HttpMethod.GET])
+@blueprint.route(Endpoint.TAG, methods=[HttpMethod.GET])
 def retrieve_tag():
     state = """SELECT 
 	        tag_name
@@ -239,8 +291,7 @@ def retrieve_tag():
     tag = []
     for i in result :
         tag.append(i['tag_name'])
-    tag_name = {"tags" : tag
-    }
+    tag_name = {"tags" : tag}
     return tag_name 
 
 

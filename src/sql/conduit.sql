@@ -1,6 +1,7 @@
 DROP TABLE IF EXISTS conduit.favorited ;
-DROP TABLE IF EXISTS condui.followed ;
+DROP TABLE IF EXISTS conduit.followed ;
 DROP TABLE IF EXISTS conduit.tag ;
+DROP TABLE IF EXISTS conduit.comments ;
 DROP TABLE IF EXISTS conduit.article ; 
 DROP TABLE IF EXISTS conduit.author ;
 
@@ -8,7 +9,8 @@ CREATE TABLE conduit.author (
     username TEXT UNIQUE PRIMARY KEY , 
     password  TEXT NOT NULL , 
     image TEXT ,  
-    bio TEXT  
+    bio TEXT  ,
+    author_token TEXT 
 );
 CREATE TABLE conduit.article (
     slug TEXT PRIMARY KEY ,
@@ -25,8 +27,7 @@ CREATE TABLE conduit.article (
 
 
 CREATE TABLE conduit.tag (
-    id SERIAL PRIMARY KEY ,
-    tag_name TEXT ,
+    tag_name TEXT[] ,
     article_slug TEXT ,
     CONSTRAINT fk_article 
     FOREIGN KEY(article_slug)
@@ -55,5 +56,19 @@ CREATE TABLE conduit.followed (
     REFERENCES conduit.author(username)
 );
 
+CREATE TABLE conduit.comments (
+		id SERIAL PRIMARY KEY ,
+		created_at TIMESTAMP WITH TIME ZONE ,
+		updated_at TIMESTAMP WITH TIME ZONE ,
+		body TEXT , 
+		article_slug TEXT , 
+		author_name TEXT ,
+		CONSTRAINT fk_article 
+    FOREIGN KEY (article_slug) 
+    REFERENCES conduit.article(slug),
+	CONSTRAINT fk_author
+    FOREIGN KEY (author_name) 
+    REFERENCES conduit.author(username)
+);
 
 
