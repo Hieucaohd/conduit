@@ -18,7 +18,17 @@ def create_user():
         return jsonify({"message": "User already exists."})
     else:
         insert_user(email, password)
-        return jsonify({"message": "created user successfull"})
+        user_credentials = {'username': email}
+        encode_token = encode(user_credentials)
+        return {
+                "user": {
+                    "email": f"{email}",
+                    "token": f"{encode_token}",
+                    "username": "jake",
+                    "bio": "I work at statefarm",
+                    "image": None
+                        }
+                }
 
 def check_user_exists(email):
     result = execute_sql(
@@ -31,7 +41,7 @@ def check_user_exists(email):
 def insert_user(email, password):
     execute_sql2(
         f""" INSERT INTO conduit.author(username,password) VALUES ('{email}','{password}')""")
-
+ 
 @blueprint.route(Endpoint.USER1, methods=[HttpMethod.POST])
 def login_user():
     data = request.get_json()
@@ -72,7 +82,8 @@ def check_password(email, password):
     else:
         return False
 
-@blueprint.route(Endpoint.USER, methods=[HttpMethod.GET])
+
+@blueprint.route(Endpoint.USER4, methods=[HttpMethod.GET])
 def get_current_user():
     to = request.headers.get('Authorization')
     token = to[6:]
@@ -90,7 +101,7 @@ def get_current_user():
     return {"user":result_main 
     }
 
-@blueprint.route(Endpoint.USER, methods=[HttpMethod.PUT])
+@blueprint.route(Endpoint.USER4, methods=[HttpMethod.PUT])
 def update_user():
     to = request.headers.get('Authorization')
     token = to[6:] 
@@ -103,12 +114,15 @@ def update_user():
     data = request.get_json()
     bio = data.get('user', {}).get('bio')
     image = data.get('user', {}).get('image')
-    state = f"UPDATE conduit.author SET bio='{bio}' , image='{image}' WHERE username ='{username}'"
-    execute_sql1(state) 
+    email = data.get('user', {}).get('email')
+    username_get = data.get('user', {}).get('username')
+
+    state = f"UPDATE conduit.author SET bio='{bio}' , image='{image}',email='{email}',username='{username_get}' WHERE username ='{username}'"
+    execute_sql2(state) 
     return {
             "user": 
             {
-                "email": "jake@jake.jake",
+                "email": f"{email}",
                 "token": f"{to}",
                 "username": f"{username}",
                 "bio": f"{bio}",

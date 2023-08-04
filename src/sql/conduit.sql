@@ -7,10 +7,10 @@ DROP TABLE IF EXISTS conduit.author ;
 
 CREATE TABLE conduit.author (
     username TEXT UNIQUE PRIMARY KEY , 
+    email TEXT ,
     password  TEXT NOT NULL , 
     image TEXT ,  
-    bio TEXT  ,
-    author_token TEXT 
+    bio TEXT  
 );
 CREATE TABLE conduit.article (
     slug TEXT PRIMARY KEY ,
@@ -27,8 +27,9 @@ CREATE TABLE conduit.article (
 
 
 CREATE TABLE conduit.tag (
-    tag_name TEXT[] ,
+    tag_name TEXT ,
     article_slug TEXT ,
+    PRIMARY KEY(tag_name,article_slug),
     CONSTRAINT fk_article 
     FOREIGN KEY(article_slug)
     REFERENCES conduit.article(slug)
