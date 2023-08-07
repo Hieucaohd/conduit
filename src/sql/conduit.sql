@@ -6,7 +6,8 @@ DROP TABLE IF EXISTS conduit.article ;
 DROP TABLE IF EXISTS conduit.author ;
 
 CREATE TABLE conduit.author (
-    username TEXT UNIQUE PRIMARY KEY , 
+    id SERIAL PRIMARY KEY , 
+    username TEXT UNIQUE  , 
     email TEXT ,
     password  TEXT NOT NULL , 
     image TEXT ,  
@@ -19,10 +20,10 @@ CREATE TABLE conduit.article (
     body TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE ,
     updated_at TIMESTAMP WITH TIME ZONE ,
-    author_name TEXT,
+    id_author INT ,
     CONSTRAINT fk_author
-    FOREIGN KEY(author_name) 
-    REFERENCES conduit.author(username)
+    FOREIGN KEY(id_author) 
+    REFERENCES conduit.author(id)
 );
 
 
@@ -36,40 +37,40 @@ CREATE TABLE conduit.tag (
 );
 CREATE TABLE conduit.favorited (
     article_slug TEXT ,
-    username TEXT , 
-    PRIMARY KEY (article_slug,username),
+    id_author INT , 
+    PRIMARY KEY (article_slug,id_author),
     CONSTRAINT fk_user 
-    FOREIGN KEY (username)
-    REFERENCES conduit.author(username),
+    FOREIGN KEY (id_author)
+    REFERENCES conduit.author(id),
     CONSTRAINT fk_article
     FOREIGN KEY (article_slug) 
     REFERENCES conduit.article(slug)
 );
 CREATE TABLE conduit.followed (
-    author_username TEXT ,
-    user_username TEXT ,
-    PRIMARY KEY (author_username,user_username) ,
+    id_author INT ,
+    id_user INT ,
+    PRIMARY KEY (id_author,id_user) ,
     CONSTRAINT fk_author 
-    FOREIGN KEY (author_username)
-    REFERENCES conduit.author(username),
+    FOREIGN KEY (id_author)
+    REFERENCES conduit.author(id),
     CONSTRAINT fk_user_follow
-    FOREIGN KEY (user_username) 
-    REFERENCES conduit.author(username)
+    FOREIGN KEY (id_user) 
+    REFERENCES conduit.author(id)
 );
 
 CREATE TABLE conduit.comments (
-		id SERIAL PRIMARY KEY ,
-		created_at TIMESTAMP WITH TIME ZONE ,
-		updated_at TIMESTAMP WITH TIME ZONE ,
-		body TEXT , 
-		article_slug TEXT , 
-		author_name TEXT ,
-		CONSTRAINT fk_article 
+    id SERIAL PRIMARY KEY ,
+    created_at TIMESTAMP WITH TIME ZONE ,
+    updated_at TIMESTAMP WITH TIME ZONE ,
+    body TEXT , 
+    article_slug TEXT , 
+    id_author INT ,
+    CONSTRAINT fk_article 
     FOREIGN KEY (article_slug) 
     REFERENCES conduit.article(slug),
 	CONSTRAINT fk_author
-    FOREIGN KEY (author_name) 
-    REFERENCES conduit.author(username)
+    FOREIGN KEY (id_author) 
+    REFERENCES conduit.author(id)
 );
 
 

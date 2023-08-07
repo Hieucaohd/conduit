@@ -12,7 +12,6 @@ def create_user():
     data = request.get_json()
     email = data.get('user', {}).get('email')
     password = data.get('user', {}).get('password')
-    # Check if the user already exists in the database
     existing_user = check_user_exists(email)
     if existing_user:
         return jsonify({"message": "User already exists."})
@@ -50,8 +49,11 @@ def login_user():
     data = request.get_json()
     email = data.get('user', {}).get('email')
     password = data.get('user', {}).get('password')
-    user_credentials = {'username': email}
     result1 = check_username(email)
+    state = f"""SELECT id from conduit.author WHERE email ='{email}'"""
+    result = execute_sql(state)
+    id = result[0]['id']
+    user_credentials = {'id': id}
     if result1:
         if check_password(email, password):
             encode_token = encode(user_credentials)
@@ -59,7 +61,7 @@ def login_user():
                 "user": {
                     "email": f"{email}",
                     "token": f"{encode_token}",
-                    "username": "jake",
+                    "username": f"{email}",
                     "bio": "I work at statefarm",
                     "image": None
                 }
@@ -71,7 +73,7 @@ def login_user():
 
 
 def check_username(email):
-    state = f"""SELECT username,password from conduit.author WHERE username = '{email}' """
+    state = f"""SELECT username from conduit.author WHERE username = '{email}' """
     result = execute_sql(state)
     if result:
         return True
@@ -95,14 +97,13 @@ def get_current_user():
     if not token:
         return jsonify({"message": "your token is not commited or incorrect"})
     jwt_token = decode(token)
-    username = jwt_token['username']
-    if not username:
+    id = jwt_token['id']
+    if not id:
         return jsonify({"message": "invalid token"})
-    state = f"""SELECT username,bio,image FROM conduit.author WHERE username='{username}'"""
+    state = f"""SELECT email,username,bio,image FROM conduit.author WHERE id='{id}'"""
     result = execute_sql(state)
     result_main = result[0]
     result_main['token'] = token
-    result_main['email'] = username
     return {"user": result_main
             }
 
@@ -114,25 +115,61 @@ def update_user():
     if not token:
         return jsonify({"message": "your token is not commited or not correct"})
     jwt_token = decode(token)
-    username = jwt_token['username']
-    if not username:
+    id = jwt_token['id']
+    if not id:
         return jsonify({"message": "invalid token"})
     data = request.get_json()
-    bio = data.get('user', {}).get('bio')
-    image = data.get('user', {}).get('image')
-    email = data.get('user', {}).get('email')
+    bio_get = data.get('user', {}).get('bio')
+    image_get = data.get('user', {}).get('image')
+    email_get = data.get('user', {}).get('email')
     username_get = data.get('user', {}).get('username')
-
-    state = f"UPDATE conduit.author SET bio='{bio}' , image='{image}',email='{email}',username='{username_get}' WHERE username ='{username}'"
-    execute_sql2(state)
+    password_get = data.get('user', {}).get('password')
+    state = f"""SELECT * FROM conduit.author WHERE id ='{id}'"""
+    result = execute_sql(state)
+    password = result[0]['password']
+    email = result[0]['email']
+    username = result[0]['username']
+    if not password_get:
+        state = f"""UPDATE conduit.author SET bio='{bio_get}' , image='{image_get}',email='{email_get}'
+        ,username='{username_get}', password='{password}' WHERE id ='{id}'
+        """
+        execute_sql2(state)
+        return {
+            "user":
+            {
+                "email": f"{email_get}",
+                "token": f"{token}",
+                "username": f"{username_get}",
+                "bio": f"{bio_get}",
+                "image": f"{image_get}"
+            }
+        }
+    elif not email_get:
+        state = f"""UPDATE conduit.author SET bio='{bio_get}' , image='{image_get}',email='{email}'
+        ,username='{username_get}', password='{password}' WHERE id ='{id}'"""
+        execute_sql2(state)
+        return {
+            "user":
+            {
+                "email": f"{email}",
+                "token": f"{token}",
+                "username": f"{username_get}",
+                "bio": f"{bio_get}",
+                "image": f"{image_get}"
+            }
+        }
+    elif not username_get:
+        state = f"""UPDATE conduit.author SET bio='{bio_get}' , image='{image_get}',email='{email_get}'
+    ,username='{username}', password='{password}' WHERE id ='{id}'"""
+        execute_sql2(state)
     return {
         "user":
             {
-                "email": f"{email}",
-                "token": f"{to}",
+                "email": f"{email_get}",
+                "token": f"{token}",
                 "username": f"{username}",
-                "bio": f"{bio}",
-                "image": f"{image}"
+                "bio": f"{bio_get}",
+                "image": f"{image_get}"
             }
     }
 
@@ -154,17 +191,32 @@ def follow_user(au_username):
     if not token:
         return jsonify({"message": "your token is not commited or invalid"})
     jwt_token = decode(token)
-    user_username = jwt_token['username']
-    if not user_username:
+    id = jwt_token['id']
+    if not id:
         return jsonify({'message': 'check your token'})
-    state = f"""INSERT INTO conduit.followed(author_username,user_username) VALUES ('{au_username}','{user_username}')"""
-    execute_sql2(state)
-    state1 = f""" SELECT username,bio,image FROM conduit.author WHERE username ='{au_username}' """
-    result = execute_sql(state1)
-    result_main = result[0]
-    result_main['following'] = False
-    return {'profile': result_main
-            }
+    state = f"""SELECT username FROM conduit.author WHERE id ='{id}'"""
+    result = execute_sql(state)
+    user_username = result[0]['username']
+    state = f"""SELECT id FROM conduit.author WHERE username IN ('{au_username}','{user_username}')"""
+    result = execute_sql(state)
+    list_id = []
+    for i in result:
+        list_id.append(i['id'])
+    state = f"""SELECT * FROM conduit.followed WHERE id_user ='{list_id[1]}' AND id_author ='{list_id[0]}'"""
+    result = execute_sql2(state)
+    if result:
+        result_main = unfollow_user(au_username=au_username)
+        return result_main
+    else:
+        state = f"""INSERT INTO conduit.followed(id_author,id_user) VALUES ('{list_id[0]}','{list_id[1]}')"""
+        execute_sql2(state)
+        state1 = f""" SELECT username,bio,image FROM conduit.author WHERE username ='{au_username}' """
+        result = execute_sql(state1)
+        result_main = result[0]
+        result_main['following'] = False
+        return {
+            'profile': result_main
+        }
 
 
 @blueprint.route(Endpoint.USER3, methods=[HttpMethod.DELETE])
@@ -174,13 +226,30 @@ def unfollow_user(au_username):
     if not token:
         return jsonify({"message": "your token is not commited or invalid"})
     jwt_token = decode(token)
-    user_username = jwt_token['username']
-    if not user_username:
+    id = jwt_token['id']
+    if not id:
         return jsonify({'message': "check your token again"})
-    state = f"""DELETE FROM conduit.followed 
-WHERE author_username = '{au_username}' AND user_username = '{user_username}'"""
+    state = f"""SELECT username FROM conduit.author WHERE id ='{id}'"""
+    result = execute_sql(state)
+    user_username = result[0]['username']
+    state = f"""SELECT id FROM conduit.author WHERE username IN ('{au_username}','{user_username}')"""
+    result = execute_sql(state)
+    list_id = []
+    for i in result:
+        list_id.append(i['id'])
+    state = f""" 
+        DELETE FROM conduit.followed 
+        WHERE 
+            id_author = '{list_id[0]}' 
+            AND id_user = '{list_id[1]}'
+    """
     execute_sql2(state)
-    state1 = f""" SELECT username,bio,image FROM conduit.author WHERE username ='{au_username}' """
+    state1 = f"""
+        SELECT 
+            username,bio,image 
+        FROM conduit.author 
+        WHERE username ='{au_username}' 
+        """
     result = execute_sql(state1)
     result_main = result[0]
     result_main['following'] = False

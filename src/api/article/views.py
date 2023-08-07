@@ -23,7 +23,7 @@ def get_article():
             COUNT(favorited.article_slug) AS favorites_count 
         FROM
             conduit.article AS article
-            LEFT JOIN conduit.author ON article.author_name = conduit.author.username
+            LEFT JOIN conduit.author ON article.id_author = conduit.author.id
             LEFT JOIN conduit.favorited ON article.slug = favorited.article_slug
             LEFT JOIN conduit.tag ON tag.article_slug = article.slug
         {where}
@@ -63,9 +63,10 @@ def get_article():
         del a['favorites_count']
         a['author'] = author
         a['favorited'] = False
-    dict_return = {"articles": result,
-                   "articlesCount": len(result),
-                   }
+    dict_return = {
+        "articles": result,
+        "articlesCount": len(result),
+    }
 
     return dict_return
 
@@ -104,12 +105,25 @@ def get_single_article(slug):
 	updated_at,
 	username,
 	bio,
-	image 
+	image, 
+	COUNT ( favorited.article_slug ) AS favorites_count 
 FROM
 	conduit.article AS article
-	LEFT JOIN conduit.author ON article.author_name = conduit.author.username 
-WHERE 
-	article.slug in ('{slug}') """
+	LEFT JOIN conduit.author ON article.id_author = conduit.author.
+	ID LEFT JOIN conduit.favorited ON favorited.article_slug = article.slug
+WHERE
+	article.slug = '{slug}' 
+GROUP BY
+	article.slug,
+	article.title,
+	article.description,
+	article.body,
+	article.created_at,
+	article.updated_at,
+	author.username,
+	author.bio,
+	author.image
+	 """
     result = execute_sql(state)
     if len(result) == 0:
         return {}
@@ -118,12 +132,14 @@ WHERE
     result = result[0]
     b = result["updated_at"]
     c = result["created_at"]
+    favorites_count = result['favorites_count']
+    result['favoritesCount'] = favorites_count
+    del result['favorites_count']
     del result["created_at"]
     del result["updated_at"]
     result['updatedAt'] = b
     result['createdAt'] = c
     result["favorited"] = False
-    result["favoritesCount"] = 0
     result['tagList'] = taglist
     username = result["username"]
     bio = result["bio"]
@@ -173,11 +189,9 @@ def create_article():
     if not token:
         return jsonify({"message": "your token is not committed or invalid"})
     jwt_token = decode(token)
-    username = jwt_token['username']
-
-    if not username:
+    id = jwt_token['id']
+    if not id:
         return jsonify({"message": "check your token again"})
-
     data = request.get_json()
     title = data.get('article', {}).get('title')
     state = f"""SELECT * FROM conduit.article WHERE slug = '{title}'"""
@@ -189,8 +203,8 @@ def create_article():
     body = article_body.get('body')
     taglist = article_body.get('tagList', [])
     current_date_time = datetime.now()
-    state = f"""INSERT INTO conduit.article(slug,title,description,body,created_at,updated_at,author_name)
-                VALUES('{title}','{title}','{description}','{body}','{current_date_time}','{current_date_time}','{username}')"""
+    state = f"""INSERT INTO conduit.article(slug,title,description,body,created_at,updated_at,id_author)
+                VALUES('{title}','{title}','{description}','{body}','{current_date_time}','{current_date_time}','{id}')"""
     execute_sql2(state)
     for i in taglist:
         state1 = f"""INSERT INTO conduit.tag(tag_name,article_slug)
@@ -207,23 +221,42 @@ def update_article(slug):
     if not token:
         return jsonify({'message': 'check your token'})
     jwt_token = decode(token)
-    username = jwt_token['username']
-    if not username:
+    id = jwt_token['id']
+    if not id:
         return "check your token again"
     data = request.get_json()
     title = data.get('article', {}).get('title')
     description = data.get('article', {}).get('description')
     body = data.get('article', {}).get('body')
     taglist = data.get('article', {}).get('tagList')
-    state = f"""SELECT author_name FROM conduit.article WHERE slug='{slug}'"""
+    state = f"""SELECT 
+                id_author,title
+            FROM conduit.article  
+            WHERE article.slug = '{slug}' 
+            """
     result = execute_sql(state)
-    result = result[0]['author_name']
-
-    if result == username:
+    id_get = result[0]['id_author']
+    title_get = result[0]['title']
+    if id == id_get:
+        if not title:
+            state = f"""UPDATE conduit.article SET title = '{title_get}',description='{description}',body = '{body}' WHERE slug = '{slug}'"""
+            for i in taglist:
+                lst_existed = check_existed_tag(slug)
+                if i in lst_existed:
+                    continue
+                state3 = f"""INSERT INTO conduit.tag(tag_name,article_slug) VALUES ('{i}','{slug}')"""
+                execute_sql2(state3)
+            execute_sql2(state)
+            result = get_single_article(slug)
+            return result
+    else:
+        return jsonify({'message': 'you are not own of article'})
+    if id == id_get:
         state = f"""UPDATE conduit.article SET title = '{title}',description='{description}',body = '{body}' WHERE slug = '{slug}'"""
         for i in taglist:
-            state4 = """SELECT """
-            # KIỂM TRA NẾU MÀ TAG LIST ĐÃ TỒN TẠI TRONG DATABASE CÙNG VỚI SLUG THÌ KHÔNG THÊM NỮA
+            lst_existed = check_existed_tag(slug)
+            if i in lst_existed:
+                continue
             state3 = f"""INSERT INTO conduit.tag(tag_name,article_slug) VALUES ('{i}','{slug}')"""
             execute_sql2(state3)
         execute_sql2(state)
@@ -233,6 +266,15 @@ def update_article(slug):
         return jsonify({'message': 'you are not own of article'})
 
 
+def check_existed_tag(slug):
+    state4 = f"""SELECT * FROM conduit.tag WHERE tag.article_slug = '{slug}'"""
+    result = execute_sql(state4)
+    list_existed = []
+    for j in result:
+        list_existed.append(j['tag_name'])
+    return list_existed
+
+
 @blueprint.route(Endpoint.ARTICLE1, methods=[HttpMethod.DELETE])
 def detele_article(slug):
     to = request.headers.get('Authorization')
@@ -240,18 +282,22 @@ def detele_article(slug):
     if not token:
         return jsonify({'message': 'check your token'})
     jwt_token = decode(token)
-    username = jwt_token['username']
-    if not username:
+    id = jwt_token['id']
+    if not id:
         return jsonify({'message': 'check your token'})
-    state2 = f"""SELECT author_name FROM conduit.article WHERE slug ='{slug}'"""
-    result = execute_sql(state2)
-    result = result[0]
-    result = result['author_name']
-    if username == result:
+    state = f"""SELECT id_author FROM conduit.article WHERE slug='{slug}'"""
+    result = execute_sql(state)
+    result = result[0]['id_author']
+    if id == result:
+        state3 = f"""DELETE FROM conduit.comments WHERE article_slug ='{slug}'"""
+        execute_sql2(state3)
+        state2 = f"""DELETE FROM conduit.favorited WHERE article_slug ='{slug}'"""
+        execute_sql2(state2)
         state1 = f"""DELETE FROM conduit.tag WHERE tag.article_slug ='{slug}'"""
         execute_sql2(state1)
         state = f"""DELETE FROM conduit.article WHERE article.slug='{slug}'"""
         execute_sql2(state)
+    return jsonify({'message': 'deleted successfully'})
 
 
 @blueprint.route(Endpoint.ARTICLE_COMMENTS, methods=[HttpMethod.POST])
@@ -261,27 +307,29 @@ def add_comments(slug):
     if not token:
         return jsonify({'message': 'check your token'})
     jwt_token = decode(token)
-    username = jwt_token['username']
-    if not username:
+    id = jwt_token['id']
+    if not id:
         return jsonify({'message': 'check your token'})
     data = request.get_json()
     body = data.get('comment', {}).get('body')
     date = datetime.now()
-    state = f"""INSERT INTO conduit.comments(created_at,updated_at,body,article_slug,author_name) VALUES('{date}','{date}'
-    ,'{body}','{slug}','{username}')"""
+    state = f"""INSERT INTO conduit.comments(created_at,updated_at,body,article_slug,id_author) VALUES('{date}','{date}'
+    ,'{body}','{slug}','{id}')"""
     execute_sql2(state)
     state1 = f"""SELECT 
-	comments.id ,
+	comments.id,
 	comments.created_at,
 	comments.updated_at,
 	comments.body,
 	author.username,
 	author.bio,
 	author.image
-     FROM conduit.comments LEFT JOIN 
-    conduit.author ON comments.author_name = author.username 
-    WHERE comments.created_at = '{date}' AND id IN (SELECT id FROM conduit.comments WHERE article_slug = 
-    '{slug}' AND author_name = '{username}') """
+    FROM 
+        conduit.comments 
+    LEFT JOIN 
+        conduit.author ON comments.id_author = author.id 
+    WHERE comments.created_at = '{date}' AND comments.id IN (SELECT id FROM conduit.comments WHERE article_slug = 
+    '{slug}' AND id_author = '{id}') """
     result = execute_sql(state1)
     result_main = result[0]
     a = result_main['created_at']
@@ -296,8 +344,8 @@ def add_comments(slug):
     del result_main['bio']
     del result_main['image']
     del result_main['username']
-    result_main['created_At'] = a
-    result_main['updated_At'] = b
+    result_main['createdAt'] = a
+    result_main['updatedAt'] = b
     result_main['author'] = author
     return {'comment': result_main}
 
@@ -306,7 +354,7 @@ def add_comments(slug):
 def get_comments(slug):
     state = f"""
 SELECT 
-	id ,
+	comments.id ,
 	comments.created_at,
 	comments.updated_at,
 	comments.body,
@@ -314,8 +362,8 @@ SELECT
 	author.bio,
 	author.image
 FROM conduit.comments AS comments 
-INNER JOIN conduit.author ON comments.author_name = author.username 
-RIGHT JOIN conduit.article ON comments.article_slug = article.slug 
+LEFT JOIN conduit.author ON comments.id_author = author.id 
+LEFT JOIN conduit.article ON comments.article_slug = article.slug 
 WHERE 
 	slug in ('{slug}')
 """
@@ -349,18 +397,13 @@ def delete_comments(slug, id):
     if not token:
         return jsonify({'message': 'check your token'})
     jwt_token = decode(token)
-    username = jwt_token['username']
-    if not username:
+    id_author = jwt_token['id']
+    if not id_author:
         return jsonify({'message': 'check your token'})
-    state = f"""SELECT author_name FROM conduit.comments WHERE id = '{id}'"""
+    state = f"""SELECT id_author FROM conduit.comments WHERE id = '{id}' AND article_slug ='{slug}'"""
     result = execute_sql(state)
-    result = result[0]
-    author_comment = result['author_name']
-    state1 = f"""SELECT author_name FROM conduit.article WHERE slug = '{slug}'"""
-    result1 = execute_sql(state1)
-    result1 = result1[0]
-    author_article = result1['author_name']
-    if username == author_comment and username == author_article:
+    result = result[0]['id_author']
+    if id_author == result:
         state2 = f""" DELETE FROM conduit.comments WHERE id = '{id}' """
         execute_sql2(state2)
         return jsonify({'message': 'deleted comment successfully'})
@@ -375,22 +418,22 @@ def add_favourite(slug):
     if not token:
         return jsonify({'message': 'check your token'})
     jwt_token = decode(token)
-    username = jwt_token['username']
-    if not username:
+    id = jwt_token['id']
+    if not id:
         return jsonify({'message': 'check your token'})
-    state = f"""SELECT * FROM conduit.favorited """
+    state = f"""SELECT id_author FROM conduit.favorited WHERE article_slug='{slug}'"""
     result = execute_sql(state)
-    result = result[0]
-    username_main = result['username']
-    if username == username_main and result['article_slug'] == slug:
-        return jsonify({"message": "you favorited this article"})
-    state = f"""INSERT INTO conduit.favorited(article_slug,username)
-        VALUES ('{slug}','{username}')"""
-    execute_sql2(state)
+    list_id = []
+    for i in result:
+        list_id.append(i['id_author'])
+    if id in list_id:
+        un_favourite(slug)
+    else:
+        state = f"""INSERT INTO conduit.favorited(article_slug,id_author)
+            VALUES ('{slug}','{id}')"""
+        execute_sql2(state)
     result = get_single_article(slug)
     return result
-# KIỂM TRA NẾU NGƯỜI DÙNG ADD 2 LẦN SEVER CÓ SẬP KHÔNG
-# NẾU MÀ ADD_FAVORITE 2 LẦN THÌ SỬA THÀNH UN_FAVORITE
 
 
 @blueprint.route(Endpoint.ARTICLE_FAVORITE, methods=[HttpMethod.DELETE])
@@ -400,12 +443,18 @@ def un_favourite(slug):
     if not token:
         return jsonify({"message": 'check your token'})
     jwt_token = decode(token)
-    username = jwt_token['username']
-    if not username:
+    id = jwt_token['id']
+    if not id:
         return jsonify({"message": 'check your token'})
-    state = f"""DELETE FROM conduit.favorited WHERE favorited.username = ('{username}') AND favorited.article_slug = ('{slug}')"""
-    execute_sql2(state)
-    result = get_single_article(slug)
+    state = f"""SELECT id_author FROM conduit.favorited WHERE article_slug='{slug}'"""
+    result = execute_sql(state)
+    list_id = []
+    for i in result:
+        list_id.append(i['id_author'])
+    if id in list_id:
+        state = f"""DELETE FROM conduit.favorited WHERE favorited.id_author = ('{id}') AND favorited.article_slug = ('{slug}')"""
+        execute_sql2(state)
+        result = get_single_article(slug)
     return result
 
 
